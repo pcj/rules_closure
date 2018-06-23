@@ -93,6 +93,10 @@ def _closure_proto_aspect_impl(target, ctx):
   srcs = depset([js])
   deps = unfurl(ctx.rule.attr.deps, provider="closure_js_library")
   deps += [ctx.attr._closure_library, ctx.attr._closure_protobuf_jspb]
+  proto_deps = unfurl(ctx.rule.attr.deps, provider="proto")
+  descriptors = depset(
+    direct = target.files.to_list(),
+    transitive=[d.proto.transitive_descriptor_sets for d in proto_deps])
 
   suppress = [
       "missingProperties",
@@ -104,7 +108,8 @@ def _closure_proto_aspect_impl(target, ctx):
       srcs, deps, ctx.rule.attr.testonly, suppress, True,
 
       ctx.files._closure_library_base,
-      ctx.executable._ClosureWorker)
+      ctx.executable._ClosureWorker,
+      internal_descriptors = descriptors)
   return struct(
       exports = library.exports,
       closure_js_library=library.closure_js_library,
