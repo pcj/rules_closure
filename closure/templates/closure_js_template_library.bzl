@@ -22,17 +22,27 @@ load("//closure/private:defs.bzl", "SOY_FILE_TYPE", "unfurl")
 _SOYTOJSSRCCOMPILER = "@com_google_template_soy//:SoyToJsSrcCompiler"
 
 def _impl(ctx):
-    args = ["--outputPathFormat=%s/{INPUT_DIRECTORY}/{INPUT_FILE_NAME}.js" %
+    args = []
+    inputs = [] + ctx.files.plugin_modules
+
+    # The executable for this action is the generated bash script for the
+    # SoyToJsSrcCompiler. We need to augment the classpath with plugin_modules
+    # (if they exist).  The --main_advice_classpath is that scripts' mechanism
+    # for prepending classpath entries. 
+    if ctx.files.plugin_modules:
+        # args.append("--print_javabin")
+        args.append("--main_advice_classpath=" + ctx.configuration.host_path_separator.join([f.path for f in ctx.files.plugin_modules]))
+
+    args += ["--outputPathFormat=%s/{INPUT_DIRECTORY}/{INPUT_FILE_NAME}.js" %
             ctx.configuration.genfiles_dir.path]
     if ctx.attr.soy_msgs_are_external:
         args += ["--googMsgsAreExternal"]
-    if ctx.attr.should_provide_require_soy_namespaces:
-        args += ["--shouldProvideRequireSoyNamespaces"]
+    # if ctx.attr.should_provide_require_soy_namespaces:
+    #     args += ["--shouldProvideRequireSoyNamespaces"]
     if ctx.attr.should_generate_soy_msg_defs:
         args += ["--shouldGenerateGoogMsgDefs"]
-    if ctx.attr.plugin_modules:
-        args += ["--pluginModules=%s" % ",".join(ctx.attr.plugin_modules)]
-    inputs = []
+    if ctx.attr.plugin_module_classnames:
+        args += ["--pluginModules=%s" % ",".join(ctx.attr.plugin_module_classnames)]
     for f in ctx.files.srcs:
         args.append("--srcs=" + f.path)
         inputs.append(f)
@@ -52,6 +62,10 @@ def _impl(ctx):
         progress_message = "Generating %d SOY v2 JS file(s)" % len(
             ctx.attr.outputs,
         ),
+        env = {
+            "CLASSPATH": ":".join([f.path for f in ctx.files.plugin_modules]),
+            "JAVA_STUB_DEBUG": "set -x",
+        },
     )
 
 _closure_js_template_library = rule(
@@ -65,7 +79,8 @@ _closure_js_template_library = rule(
         ),
         "outputs": attr.output_list(),
         "globals": attr.label(allow_single_file = True),
-        "plugin_modules": attr.label_list(),
+        "plugin_modules": attr.label_list(allow_files = True),
+        "plugin_module_classnames": attr.string_list(),
         "should_provide_require_soy_namespaces": attr.bool(default = True),
         "should_generate_soy_msg_defs": attr.bool(),
         "soy_msgs_are_external": attr.bool(),
@@ -81,6 +96,7 @@ def closure_js_template_library(
         testonly = None,
         globals = None,
         plugin_modules = None,
+        plugin_module_classnames = None,
         should_provide_require_soy_namespaces = None,
         should_generate_soy_msg_defs = None,
         soy_msgs_are_external = None,
@@ -96,6 +112,7 @@ def closure_js_template_library(
         visibility = ["//visibility:private"],
         globals = globals,
         plugin_modules = plugin_modules,
+        plugin_module_classnames = plugin_module_classnames,
         should_provide_require_soy_namespaces = should_provide_require_soy_namespaces,
         should_generate_soy_msg_defs = should_generate_soy_msg_defs,
         soy_msgs_are_external = soy_msgs_are_external,
